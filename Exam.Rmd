@@ -1,0 +1,230 @@
+---
+title: "Exam 2"
+output: html_notebook
+author: "Danielle Chaung"
+date: "12/4/2018"
+---
+This exam uses graduation.csv data for examining differences in time to graduation among undergraduate students. Because of the way this data was created, the time outcome is somewhat strange, just interpret estimates as increase/decrease and multiplicatively as appropriate for the model (don’t attempt to state units).
+
+| name     | variable                                                             |
+|----------|----------------------------------------------------------------------|
+| id       | row number                                                           |
+| time     | time to undergraduate graduation                                     |
+| event    | a binary indicator of graduation (1 yes 0 no)                        |
+| prttime  | a binary indicator of if the student is parttime or not (1 yes 0 no) |
+| age      | age at college enrollment                                            |
+| gpa      | student's GPA at the start of their 2nd year                         |
+| dblmaj   | a binary indicator of if the student is a double major or not        |
+
+```{r}
+library(tidyverse)
+link="https://raw.githubusercontent.com/rixj/Biostatistical-Analysis/master/graduation.csv"
+dat = read_csv(file = url(link))
+attach(dat)
+library(survival)
+```
+#Problem 1
+In survival analysis, the summary table 1 typically examines how the covariates (parttime, age, gpa, dblmaj) differ by event status. Be sure to include counts/measures of center and measure of significance. Create a single summary table 1, include appropriate figures, and write an interpretive paragraph.
+
+```{r}
+sfit1 = survfit(Surv(time, event)~prttime)
+chisq.test(table(prttime,event))
+plot(sfit1,ylab=expression(hat(S)*"(t)"),xlab="t",col=1:2)
+legend("bottomright",c("Part-time","Full-time"),col=1:2,lty=1,bty="n")
+```
+```{r}
+sfit2 = survfit(Surv(time, event)~age)
+t.test(age[event==1],age[event==0])
+
+age2=ifelse(age>25,2,age)
+age1=ifelse(age2>20,1,age2)
+ageA=ifelse(age1>2,0,age1)
+sfit2a = survfit(Surv(time, event)~ageA)
+plot(sfit2a,ylab=expression(hat(S)*"(t)"),xlab="t",col=1:3)
+legend("bottomright",c("Age=26+","Age=21-25","Age=17-20"),col=1:3,lty=1,bty="n")
+```
+```{r}
+sfit3 = survfit(Surv(time, event)~gpa)
+t.test(gpa[event==1],gpa[event==0])
+
+sfit3a = survfit(Surv(time, event)~ifelse(gpa<2,0,1))
+plot(sfit3a,ylab=expression(hat(S)*"(t)"),xlab="t",col=1:2)
+legend("bottomright",c("GPA < 2.0","GPA ≥ 2.0"),col=1:2,lty=1,bty="n")
+```
+```{r}
+sfit4 = survfit(Surv(time, event)~dblmaj)
+chisq.test(table(dblmaj,event))
+plot(sfit4,ylab=expression(hat(S)*"(t)"),xlab="t",col=1:2)
+legend("bottomright",c("Double-major","Single-major"),col=1:2,lty=1,bty="n")
+```
+#Summary Table 1
+|         | Mean ± SD     | Min, Max | Critical Value | df     | P-Value   |
+|---------|---------------|----------|----------------|--------|-----------|
+| prttime | -             | -        | χ² = 203.54    | 1      | < 2.2e-16 |
+| age     | 18.60 ±  1.99 | 17, 41   | t = 4.0075     | 218.98 | 8.41E-05  |
+| gpa     | 3.11 ± 0.45   | 0.5, 4   | t = 1.1947     | 200.48 | 0.2336    |
+| dblmaj  | -             | -        | χ² = 0.0079701 | 1      | 0.9289    |
+
+Our p-values in Summary Table 1 show that prttime and age are the only significant factors in relation to event. Looking at the output of the table() functions, I have created the table below to describe general trends in the data. Looking at the table, part-time students are less likely to graduate. Every student who was older than 25 graduated. Older students were more likely to graduate. Surprisingly, students with a GPA < 2.0 were more likely to graduate than higher-GPA students. Double-major students were at the same graduation rate as peers who did not.
+
+**Overview of Data from table() functions**
+
+|         | Value         | n    | Dropped | Graduated | Survival rate |
+|---------|---------------|------|---------|-----------|---------------|
+| event   | -             | 5000 | 186     | 4814      | 0.9628        |
+| prttime | 0             | 3955 | 69      | 3886      | 0.982553729   |
+|         | 1             | 1045 | 117     | 928       | 0.888038278   |
+| gpa     | GPA = 0-1.9   | 110  | 3       | 107       | 0.972727273   |
+|         | GPA = 2.0-4.0 | 4890 | 183     | 4707      | 0.962576687   |
+| age     | 26 years +    | 75   | 0       | 75        | 1             |
+|         | 21-25 years   | 442  | 8       | 434       | 0.981900452   |
+|         | 17-20 years   | 4483 | 178     | 4305      | 0.960294446   |
+| dblmaj  | 0             | 4006 | 150     | 3856      | 0.962556166   |
+|         | 1             | 994  | 36      | 958       | 0.963782696   |
+
+```{r}
+library(oddsratio)
+fitglm = glm(event~prttime+age+gpa+dblmaj, family="binomial")
+logit = fitglm$coefficients
+exp(logit)                # odds ratio
+exp(logit)/(1+exp(logit)) # probability
+```
+**Odds-ratio Table**
+
+|         | odds ratio | probability |
+|---------|------------|-------------|
+| prttime | 0.1392271  | 0.1222119   |
+| age     | 1.1809622  | 0.5414868   |
+| gpa     | 1.2274882  | 0.5510638   |
+| dblmaj  | 1.0118082  | 0.5029347   |
+
+I calculated odds-ratio to show a more direct correlation between the covariates and the response variable.
+
+
+#Problem 2
+Fit a survival model for the data of interest. Present your best model. Explain why you fit the model you do, what covariates you use and why, examine model diagnostics, and write an interpretive paragraph.
+
+We will use Regression for a Parametric Survival Model survreg()
+
+
+```{r}
+coxfit1 <- coxph(Surv(time, event)~prttime)
+summary(coxfit1)
+survreg(Surv(time, event)~prttime ,dist='weibull')
+```
+```{r}
+coxfit2 <- coxph(Surv(time, event)~age)
+summary(coxfit2)
+survreg(Surv(time, event)~age ,dist='weibull')
+```
+```{r}
+coxfit3 <- coxph(Surv(time, event)~gpa)
+summary(coxfit3)
+survreg(Surv(time, event)~gpa ,dist='weibull')
+```
+```{r}
+coxfit4 <- coxph(Surv(time, event)~dblmaj)
+summary(coxfit4)
+survreg(Surv(time, event)~dblmaj ,dist='weibull')
+```
+```{r}
+coxfitA <- coxph(Surv(time, event)~prttime+age)
+summary(coxfitA)
+survreg(Surv(time, event)~prttime+age ,dist='weibull')
+```
+```{r}
+coxfitB <- coxph(Surv(time, event)~prttime+age+dblmaj)
+summary(coxfitB)
+survreg(Surv(time, event)~prttime+age+dblmaj ,dist='weibull')
+```
+```{r}
+summary(coxph(Surv(time, event)~prttime+age+dblmaj+gpa))
+survreg(Surv(time, event)~prttime+age+dblmaj+gpa,dist='weibull')
+```
+
+
+| Model variables        | Rsquare | Likelihood ratio test | survreg                       |
+|------------------------|---------|-----------------------|-------------------------------|
+| prttime                | 0.352   | 2170 on 1 df p=<2e-16 | χ² = 2656.77 on 1 df p=<2e-16 |
+| age                    | 0.013   | 63.05 on 1 df p=2e-15 | χ² = 59.78 on 1 df p=1.06e-14 |
+| gpa                    | 0       | 0.05  on 1 df p=0.8   | χ² = 0.03 on 1 df p=0.863     |
+| dlbmaj                 | 0.001   | 5.18  on 1 df p=0.02  | χ² = 3.03 on 1 df p=0.0818    |
+| prttime+age            | 0.372   | 2326 on 2 df p=<2e-16 | χ² = 2813.12 on 2 df p=<2e-16 |
+| prttime+age+dlbmaj     | 0.376   | 2357 on 3 df p=<2e-16 | χ² = 2843.74 on 3 df p=<2e-16 |
+| prttime+age+dblmaj+gpa | 0.376   | 2358 on 4 df p=<2e-16 | χ² = 2844.69 on 4 df p=<2e-16 |
+
+It looks like the best model is **Surv(time, event)~prttime+age+dblmaj+gpa** because it has the highest Rsquared value and the smallest p-value of any of the models.
+
+#Problem 3
+Consider the GPA variable. It may be more informative to examine a binary version of this variable, e.g. if the student had a failing GPA at the start of their 2nd year. Examine model diagnostics and write an interpretive paragraph. Also, examine and explain how this consideration alters your model from your best model. Is there any concern with altering the GPA variable in this way?
+
+Do D's get degrees? Some colleges accept D's as a passing grade as long as your overall GPA is higher than a C. So in this regard we will say that failing students are sophomores with below a C average GPA.
+
+## gpa as a continuous variable
+```{r}
+t.test(gpa[event==1],gpa[event==0])
+# survdiff(Surv(time, event)~gpa)  
+# I ran the code, but the results are too long. Check the table for the result, or uncomment this.
+summary(coxph(Surv(time, event)~gpa))
+survreg(Surv(time, event)~gpa ,dist='weibull')
+
+# survdiff(Surv(time, event)~prttime+age+dblmaj+gpa) 
+# I ran the code, but the results are too long. Check the table for the result, or uncomment this.
+summary(coxph(Surv(time, event)~prttime+age+dblmaj+gpa))
+survreg(Surv(time, event)~prttime+age+dblmaj+gpa,dist='weibull')
+```
+## gpa as a categorical variable
+```{r}
+t.test(table(ifelse(gpa<2,0,1),event))
+# survdiff(Surv(time, event)~ifelse(gpa<2,0,1)) 
+# I ran the code, but the results are too long. Check the table for the result, or uncomment this.
+summary(coxph(Surv(time, event)~ifelse(gpa<2,0,1)))
+survreg(Surv(time, event)~ifelse(gpa<2,0,1) ,dist='weibull')
+
+# survdiff(Surv(time, event)~prttime+age+dblmaj+ifelse(gpa<2,0,1)) 
+# I ran the code, but the results are too long. Check the table for the result, or uncomment this.
+summary(coxph(Surv(time, event)~prttime+age+dblmaj+ifelse(gpa<2,0,1)))
+survreg(Surv(time, event)~prttime+age+dblmaj+ifelse(gpa<2,0,1),dist='weibull')
+```
+## Results
+|                         | T-test                          | survdiff                    |  Rsquared | coxph_LikelihoodRT     | survreg                      |
+|-------------------------|---------------------------------|-----------------------------|-----------|------------------------|------------------------------|
+| gpa                     | t = 1.1947, df=200.48, p=0.2336 | χ² = 37.9, 34 df, p=0.3     | 0         | 0.05, 1 df, p=0.8      | χ² = 0, 1 df, p=0.863        |
+| gpaCategorical          | t = 1.0842, df=3, p=0.3576      | χ² = 0.1, 1 df, p=0.8       | 0         | 0.07, 1 df, p=0.8      | χ² = 0, 1 df, p=0.592        |
+| prttime+age+dblmaj+gpa  | -                               | χ² = 4855, 568 df, p=<2e-16 | 0.376     | 2358 on 4 df, p=<2e-16 | χ² = 2844.69, 4 df, p=<2e-16 |
+| prttime+age+dblmaj+gpaC | -                               | χ² = 2371, 85 df, p=<2e-16  | 0.376     | 2359 on 4 df, p=<2e-16 | χ² = 2846.24, 4 df, p=<2e-16 |
+
+When gpa is a binary value and determined by sophomores who have a GPA < 2, the p-value decreases from 0.86 to 0.59 but it is still not a significant value to be incorporated into our model. But when we look at the model with all 4 factors it is more significant than the model holding only the significantly associated variables (prttime & age). When we compare our chosen model (model with all 4 covariates) with our categorized gpa model (which also has all 4 covariates), we see that the χ²-test-statistic is slightly higher, 2846.24 vs. 2844.69 but nothing significantly different. Thus, gpa should not be categorized and we shall keep our previous model.
+
+Dichotomising gpa leads to several problems. Information is lost, so the statistical power to detect a relation between gpa and graduation is reduced. This sample is already small and we are losing more statistical power by doing so. Dichotomisation may also increase the risk of a positive result being a false positive. It reduces variation in outcome between groups. Students close to but on opposite sides of the gpa cutpoint are characterised as being very different rather than very similar. Finally, using two groups conceals any non-linearity in the relation between the variable and outcome.
+
+#Problem 4
+Fit a logistic model for the event indicator rather than a survival model (pick your covariate set from either 2 or 3). Make interpretations and comparisons. Is this a better way to examine this data? Why or why not?
+
+```{r}
+glmfit = glm(event~prttime+age+gpa+dblmaj,family=binomial(link=logit))
+summary(glmfit)
+```
+Using the logistic model we get the null deviance and residual deviance so we can compare the null model to our model and we calculate the p-value which is 0, asserting that this is a significant model. When testing the association between the factors and graduating we reject the null hypothesis at the 0.05 alpha level. We can also check the log odds ratio.
+```{r}
+fitglm = glm(event~prttime+age+gpa+dblmaj, family="binomial")
+logit = fitglm$coefficients
+exp(logit)                # odds ratio
+exp(logit)/(1+exp(logit)) # probability
+```
+This supports our previous calculation that prttime students are 0.122 times more likely to graduate than full-time students, which in other words means full-time students are 8.2 times more likely to graduate. Also older students are 18% more likely to graduate than younger students.
+```{r}
+preds = predict(glmfit, dat[,4:5])
+nroc = roc(event, preds)
+auc(nroc)
+plot(nroc)
+```
+The graph is a better display of whether or not a student will graduate and the graph shape being more of a 90-degree angle than a y=x slope shows that it is a good prediction model. Overall, the generalized linear model (glm) has less statistical power than the survival regression model (survreg) because survreg compares the regression over time which provides more meaningful results. For example, in glm you treat each student-semester observation as independent, regardless of whether it was the same person or the same semester in which observations occurred.
+
+#Tricks
+```{r}
+getS3method("summary","coxph")     # Look how a formula is calculated
+# run = *Cmd+Shift+Enter*
+# insert = *Cmd+Option+I*
+# preview the HTML = *Cmd+Shift+K*
+```
